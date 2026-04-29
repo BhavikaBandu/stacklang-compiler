@@ -1,8 +1,10 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+
 #include "lexer.h"
 #include "parser.h"
+#include "codegen.h"
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
@@ -38,6 +40,9 @@ int main(int argc, char* argv[]) {
 
     Parser parser(tokens);
     parser.parse();
+
+    CodeGen codegen(tokens);
+    codegen.generateIR("output.ll");
 
     return 0;
 }

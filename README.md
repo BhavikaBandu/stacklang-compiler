@@ -2,22 +2,19 @@
 
 ## 📌 Overview
 
-This project implements a **mini compiler for a stack-based programming language**.
-The compiler processes source code written in a custom language (**StackLang**) and performs:
+This project implements a **mini compiler for a stack-based programming language (StackLang)**.
 
-* Lexical Analysis (Lexer)
-* Parsing
-* Stack-based execution simulation
+The compiler processes custom source code and converts it into:
 
-Future phases will extend this into **LLVM IR generation and native execution**.
+> **LLVM Intermediate Representation (IR)** → which is then compiled into a **native executable using clang**
 
 ---
 
 ## 🧠 Key Idea
 
-Unlike traditional compilers that use expression trees (ASTs), this project uses a:
+Unlike traditional compilers that rely on Abstract Syntax Trees (ASTs), this project uses a:
 
-> **Stack-based execution model**
+> **Stack-based execution model (similar to JVM / WebAssembly)**
 
 ### Example:
 
@@ -38,11 +35,13 @@ Push result
 
 ---
 
-## ⚙️ Features Implemented (Day 1 & Day 2)
+## ⚙️ Features Implemented
+
+---
 
 ### ✅ Day 1 – Lexer
 
-* Custom lexer (no external tools like Flex)
+* Custom-built lexer (no external tools like Flex)
 * Tokenizes:
 
   * Numbers
@@ -51,8 +50,8 @@ Push result
   * Comparisons: `> < ==`
   * Assignment: `=`
   * Keywords: `if`, `else`, `endif`, `print`
-* File-based input support
-* Token output display
+* File-based input
+* Token stream output
 
 ---
 
@@ -74,11 +73,26 @@ Push result
 
   * `print`
 * Stack trace visualization
-* Basic error handling:
+* Error handling:
 
   * Stack underflow
   * Division by zero
   * Undefined variables
+
+---
+
+### ✅ Day 3 – LLVM IR Generation
+
+* Full LLVM backend integration
+* Conversion of stack operations → LLVM SSA form
+* LLVM IR generation for:
+
+  * Arithmetic instructions (`add`, `sub`, `mul`, `sdiv`)
+  * Variable handling (`alloca`, `store`, `load`)
+  * Comparison operations (`icmp`)
+  * Print using `printf`
+* Generation of `output.ll`
+* Compilation using `clang` to produce native executable
 
 ---
 
@@ -89,25 +103,47 @@ stacklang-compiler/
 │
 ├── src/
 │   ├── main.cpp        # Entry point
-│   ├── lexer.h         # Token definitions & lexer interface
-│   ├── lexer.cpp       # Lexer implementation
-│   ├── parser.h        # Parser interface
-│   └── parser.cpp      # Parser + stack engine
+│   ├── lexer.h         # Token definitions & lexer
+│   ├── lexer.cpp
+│   ├── parser.h        # Parser + stack simulation
+│   ├── parser.cpp
+│   ├── codegen.h       # LLVM IR generator
+│   └── codegen.cpp
 │
 ├── samples/
 │   ├── test.stack
 │   ├── arithmetic.stack
+│   ├── llvm_test.stack
 │   ├── error.stack
 │   └── undefined.stack
 │
+├── output.ll           # Generated LLVM IR
 └── README.md
 ```
 
 ---
 
-## 🧪 Sample Programs
+## 🔄 Compiler Pipeline
 
-### Example 1: Variables
+```
+Source Code
+   ↓
+Lexer (Tokenization)
+   ↓
+Parser (Stack-based execution model)
+   ↓
+LLVM IR Generation
+   ↓
+output.ll
+   ↓
+clang
+   ↓
+Native Executable
+```
+
+---
+
+## 🧪 Sample Program
 
 ```
 5 3 + x =
@@ -115,75 +151,77 @@ x 2 * y =
 y print
 ```
 
-Output:
+---
 
-```
-PRINT: 16
+## 📤 Generated LLVM IR (Example)
+
+```llvm
+%x = alloca i32
+store i32 8, ptr %x
+%x_load = load i32, ptr %x
+%multmp = mul i32 %x_load, 2
+store i32 %multmp, ptr %y
 ```
 
 ---
 
-### Example 2: Arithmetic
+## ▶️ Execution
+
+### Step 1: Compile Compiler
 
 ```
-10 5 + print
-20 4 / print
-7 3 - print
-6 8 * print
-```
-
-Output:
-
-```
-PRINT: 15
-PRINT: 5
-PRINT: 4
-PRINT: 48
+clang++ src/main.cpp src/lexer.cpp src/parser.cpp src/codegen.cpp \
+$(llvm-config --cxxflags --ldflags --system-libs --libs core) \
+-o stack_compiler
 ```
 
 ---
 
-## 🔄 Execution Flow
-
-```
-Source Code
-   ↓
-Lexer (Tokenization)
-   ↓
-Parser (Instruction Processing)
-   ↓
-Stack Execution
-   ↓
-Output
-```
-
----
-
-## 📊 Example Stack Trace
-
-```
-[STACK] PUSH NUMBER 10 -> [10]
-[STACK] PUSH NUMBER 5 -> [10, 5]
-[STACK] ADD 10 and 5 -> [15]
-PRINT: 15
-[STACK] PRINT POP -> []
-```
-
----
-
-## 🛠️ Compilation & Execution
-
-### Compile:
-
-```
-clang++ src/main.cpp src/lexer.cpp src/parser.cpp -o stack_compiler
-```
-
-### Run:
+### Step 2: Generate LLVM IR
 
 ```
 ./stack_compiler samples/test.stack
 ```
+
+---
+
+### Step 3: Compile LLVM IR
+
+```
+clang output.ll -o program
+```
+
+---
+
+### Step 4: Run Executable
+
+```
+./program
+```
+
+Output:
+
+```
+16
+```
+
+---
+
+## 📊 Stack to SSA Mapping
+
+Stack-based:
+
+```
+5 3 +
+```
+
+LLVM SSA:
+
+```
+%1 = add i32 5, 3
+```
+
+👉 Stack values are converted into **SSA temporaries**
 
 ---
 
@@ -196,7 +234,7 @@ Input:
 5 +
 
 Output:
-Error: Stack underflow during arithmetic operation
+Error: Stack underflow
 ```
 
 ---
@@ -213,22 +251,25 @@ Error: Undefined variable 'x'
 
 ---
 
-## 🚀 Future Work (Day 3 & Day 4)
+## 🚀 Future Work (Day 4)
 
-* LLVM IR generation
-* Conversion from stack model → SSA form
-* Native executable generation using `clang`
-* Full if-else implementation using LLVM basic blocks
+* Full `if-else` implementation using:
+
+  * LLVM basic blocks
+  * Conditional branching
+* Control flow graph generation
 
 ---
 
 ## 🧠 Concepts Demonstrated
 
-* Compiler Design Basics
+* Compiler Design
 * Lexical Analysis
-* Parsing Techniques
-* Stack-based Execution Model
-* Intermediate Representation (upcoming: LLVM IR)
+* Parsing
+* Stack-based computation model
+* LLVM IR generation
+* Static Single Assignment (SSA)
+* Code generation pipeline
 
 ---
 
@@ -237,7 +278,7 @@ Error: Undefined variable 'x'
 ```
 Day 1 ✅ Complete
 Day 2 ✅ Complete
-Day 3 🔜 LLVM IR Generation
+Day 3 ✅ Complete (LLVM Integration)
 Day 4 🔜 Control Flow (if-else)
 ```
 
