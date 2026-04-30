@@ -1,6 +1,5 @@
 #include "parser.h"
 #include <iostream>
-#include <stdexcept>
 
 Parser::Parser(const std::vector<Token>& tokenList) {
     tokens = tokenList;
@@ -11,7 +10,6 @@ Token Parser::currentToken() {
     if (pos >= tokens.size()) {
         return {TokenType::END_OF_FILE, ""};
     }
-
     return tokens[pos];
 }
 
@@ -19,7 +17,6 @@ Token Parser::peekToken() {
     if (pos + 1 >= tokens.size()) {
         return {TokenType::END_OF_FILE, ""};
     }
-
     return tokens[pos + 1];
 }
 
@@ -34,7 +31,6 @@ bool Parser::ensureStackSize(int required, const std::string& operation) {
         std::cerr << "Error: Stack underflow during " << operation << "\n";
         return false;
     }
-
     return true;
 }
 
@@ -51,7 +47,6 @@ void Parser::printStackTrace(const std::string& action) {
 
     for (int i = values.size() - 1; i >= 0; i--) {
         std::cout << values[i];
-
         if (i != 0) {
             std::cout << ", ";
         }
@@ -63,23 +58,11 @@ void Parser::printStackTrace(const std::string& action) {
 void Parser::pushNumber(const Token& token) {
     int value = std::stoi(token.value);
     operandStack.push(value);
-
     printStackTrace("PUSH NUMBER " + token.value);
 }
 
 void Parser::pushVariable(const Token& token) {
     std::string name = token.value;
-
-    /*
-        IMPORTANT:
-        In this language, assignment syntax is:
-
-            5 3 + x =
-
-        So when we see an identifier followed by "=",
-        we do NOT load the variable.
-        We wait for "=" to store the top stack value into that variable.
-    */
 
     if (peekToken().type == TokenType::ASSIGN) {
         std::cout << "[PARSER] Identifier '" << name << "' marked for assignment\n";
@@ -140,7 +123,6 @@ void Parser::handleArithmetic(TokenType type) {
     }
 
     operandStack.push(result);
-
     printStackTrace(opName + " " + std::to_string(left) + " and " + std::to_string(right));
 }
 
@@ -180,7 +162,6 @@ void Parser::handleComparison(TokenType type) {
     }
 
     operandStack.push(result);
-
     printStackTrace(opName + " " + std::to_string(left) + " and " + std::to_string(right));
 }
 
@@ -222,11 +203,67 @@ void Parser::handlePrint() {
     printStackTrace("PRINT POP");
 }
 
-void Parser::parse() {
-    std::cout << "\n===== PARSER + STACK TRACE =====\n";
+void Parser::handleIf() {
+    if (!ensureStackSize(1, "if condition")) {
+        return;
+    }
 
+    int condition = operandStack.top();
+    operandStack.pop();
+
+    std::cout << "[IF] Condition value = " << condition << "\n";
+
+    advance();
+
+    if (condition != 0) {
+        std::cout << "[IF] Executing THEN block\n";
+        parseBlock(true, true);
+
+        if (currentToken().type == TokenType::ELSE) {
+            advance();
+            parseBlock(false, true);
+        }
+    } else {
+        std::cout << "[IF] Skipping THEN block\n";
+        parseBlock(false, true);
+
+        if (currentToken().type == TokenType::ELSE) {
+            std::cout << "[IF] Executing ELSE block\n";
+            advance();
+            parseBlock(true, true);
+        }
+    }
+
+    if (currentToken().type == TokenType::ENDIF) {
+        std::cout << "[IF] ENDIF reached\n";
+    } else {
+        std::cerr << "Error: Missing endif\n";
+    }
+}
+
+void Parser::parseBlock(bool execute, bool stopAtElseOrEndif) {
     while (currentToken().type != TokenType::END_OF_FILE) {
         Token token = currentToken();
+
+        if (stopAtElseOrEndif &&
+            (token.type == TokenType::ELSE || token.type == TokenType::ENDIF)) {
+            return;
+        }
+
+        if (!execute) {
+            if (token.type == TokenType::IF) {
+                advance();
+                parseBlock(false, true);
+
+                if (currentToken().type == TokenType::ELSE) {
+                    advance();
+                    parseBlock(false, true);
+                }
+            }
+
+            advance();
+            continue;
+        }
 
         switch (token.type) {
             case TokenType::NUMBER:
@@ -259,15 +296,7 @@ void Parser::parse() {
                 break;
 
             case TokenType::IF:
-                std::cout << "[INFO] IF detected. Full if-else handling will be implemented on Day 4 with LLVM basic blocks.\n";
-                break;
-
-            case TokenType::ELSE:
-                std::cout << "[INFO] ELSE detected. Full if-else handling will be implemented on Day 4.\n";
-                break;
-
-            case TokenType::ENDIF:
-                std::cout << "[INFO] ENDIF detected. Full if-else handling will be implemented on Day 4.\n";
+                handleIf();
                 break;
 
             case TokenType::UNKNOWN:
@@ -280,6 +309,10 @@ void Parser::parse() {
 
         advance();
     }
+}
 
+void Parser::parse() {
+    std::cout << "\n===== PARSER + STACK TRACE =====\n";
+    parseBlock(true, false);
     std::cout << "===== PARSING COMPLETE =====\n";
 }

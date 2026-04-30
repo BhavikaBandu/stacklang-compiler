@@ -5,6 +5,7 @@
 #include <string>
 #include <stack>
 #include <unordered_map>
+#include <memory>
 #include "lexer.h"
 
 #include <llvm/IR/LLVMContext.h>
@@ -33,6 +34,7 @@ private:
     void advance();
 
     llvm::Type* intType();
+    llvm::Type* boolType();
 
     void createMainFunction();
     void createPrintfFunction();
@@ -46,6 +48,9 @@ private:
     void handleComparison(TokenType type);
     void handleAssignment();
     void handlePrint();
+    void handleIf();
+
+    void generateBlock(bool stopAtElseOrEndif);
 
     bool ensureStackSize(int required, const std::string& operation);
 

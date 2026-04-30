@@ -20,7 +20,6 @@ Token CodeGen::currentToken() {
     if (pos >= tokens.size()) {
         return {TokenType::END_OF_FILE, ""};
     }
-
     return tokens[pos];
 }
 
@@ -28,7 +27,6 @@ Token CodeGen::peekToken() {
     if (pos + 1 >= tokens.size()) {
         return {TokenType::END_OF_FILE, ""};
     }
-
     return tokens[pos + 1];
 }
 
@@ -42,12 +40,15 @@ llvm::Type* CodeGen::intType() {
     return llvm::Type::getInt32Ty(context);
 }
 
+llvm::Type* CodeGen::boolType() {
+    return llvm::Type::getInt1Ty(context);
+}
+
 bool CodeGen::ensureStackSize(int required, const std::string& operation) {
     if ((int)operandStack.size() < required) {
         std::cerr << "LLVM Error: Stack underflow during " << operation << "\n";
         return false;
     }
-
     return true;
 }
 
@@ -264,14 +265,72 @@ void CodeGen::handlePrint() {
     std::cout << "[LLVM] PRINT\n";
 }
 
-void CodeGen::generateIR(const std::string& outputFile) {
-    std::cout << "\n===== LLVM IR GENERATION =====\n";
+void CodeGen::handleIf() {
+    if (!ensureStackSize(1, "if condition")) {
+        return;
+    }
 
-    createPrintfFunction();
-    createMainFunction();
+    llvm::Value* conditionValue = operandStack.top();
+    operandStack.pop();
 
+    llvm::Value* zero =
+        llvm::ConstantInt::get(intType(), 0, true);
+
+    llvm::Value* condition =
+        builder.CreateICmpNE(conditionValue, zero, "ifcond");
+
+    llvm::BasicBlock* thenBlock =
+        llvm::BasicBlock::Create(context, "then", mainFunction);
+
+    llvm::BasicBlock* elseBlock =
+        llvm::BasicBlock::Create(context, "else");
+
+    llvm::BasicBlock* mergeBlock =
+        llvm::BasicBlock::Create(context, "ifcont");
+
+    builder.CreateCondBr(condition, thenBlock, elseBlock);
+
+    advance();
+
+    builder.SetInsertPoint(thenBlock);
+    generateBlock(true);
+
+    if (!builder.GetInsertBlock()->getTerminator()) {
+        builder.CreateBr(mergeBlock);
+    }
+
+    mainFunction->insert(mainFunction->end(), elseBlock);
+    builder.SetInsertPoint(elseBlock);
+
+    if (currentToken().type == TokenType::ELSE) {
+        advance();
+        generateBlock(true);
+    }
+
+    if (!builder.GetInsertBlock()->getTerminator()) {
+        builder.CreateBr(mergeBlock);
+    }
+
+    mainFunction->insert(mainFunction->end(), mergeBlock);
+    builder.SetInsertPoint(mergeBlock);
+
+    if (currentToken().type == TokenType::ENDIF) {
+        std::cout << "[LLVM] ENDIF reached\n";
+    } else {
+        std::cerr << "LLVM Error: Missing endif\n";
+    }
+
+    std::cout << "[LLVM] IF-ELSE BLOCK GENERATED\n";
+}
+
+void CodeGen::generateBlock(bool stopAtElseOrEndif) {
     while (currentToken().type != TokenType::END_OF_FILE) {
         Token token = currentToken();
+
+        if (stopAtElseOrEndif &&
+            (token.type == TokenType::ELSE || token.type == TokenType::ENDIF)) {
+            return;
+        }
 
         switch (token.type) {
             case TokenType::NUMBER:
@@ -304,9 +363,7 @@ void CodeGen::generateIR(const std::string& outputFile) {
                 break;
 
             case TokenType::IF:
-            case TokenType::ELSE:
-            case TokenType::ENDIF:
-                std::cout << "[LLVM] IF-ELSE will be implemented on Day 4\n";
+                handleIf();
                 break;
 
             case TokenType::UNKNOWN:
@@ -319,6 +376,15 @@ void CodeGen::generateIR(const std::string& outputFile) {
 
         advance();
     }
+}
+
+void CodeGen::generateIR(const std::string& outputFile) {
+    std::cout << "\n===== LLVM IR GENERATION =====\n";
+
+    createPrintfFunction();
+    createMainFunction();
+
+    generateBlock(false);
 
     builder.CreateRet(llvm::ConstantInt::get(intType(), 0));
 

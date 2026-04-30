@@ -27,6 +27,10 @@ private:
     void handleAssignment();
     void handlePrint();
 
+    void handleIf();
+
+    void parseBlock(bool execute, bool stopAtElseOrEndif);
+
     void printStackTrace(const std::string& action);
     bool ensureStackSize(int required, const std::string& operation);
 

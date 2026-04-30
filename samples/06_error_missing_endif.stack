@@ -1,0 +1,4 @@
+5 10 < if
+    1 print
+else
+    0 print
