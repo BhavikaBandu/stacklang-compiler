@@ -1,54 +1,33 @@
 #include "codegen.h"
 
 #include <iostream>
-#include <fstream>
+#include <iomanip>
+#include <sstream>
 
 #include <llvm/IR/Verifier.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/Support/raw_ostream.h>
 
-CodeGen::CodeGen(const std::vector<Token>& tokenList)
-    : tokens(tokenList),
-      pos(0),
-      module(std::make_unique<llvm::Module>("StackLangModule", context)),
+CodeGen::CodeGen()
+    : module(std::make_unique<llvm::Module>("StackLangModule", context)),
       builder(context),
       mainFunction(nullptr),
-      printfFunction(nullptr) {
-}
-
-Token CodeGen::currentToken() {
-    if (pos >= tokens.size()) {
-        return {TokenType::END_OF_FILE, ""};
-    }
-    return tokens[pos];
-}
-
-Token CodeGen::peekToken() {
-    if (pos + 1 >= tokens.size()) {
-        return {TokenType::END_OF_FILE, ""};
-    }
-    return tokens[pos + 1];
-}
-
-void CodeGen::advance() {
-    if (pos < tokens.size()) {
-        pos++;
-    }
+      printfFunction(nullptr),
+      stepCounter(1) {
 }
 
 llvm::Type* CodeGen::intType() {
     return llvm::Type::getInt32Ty(context);
 }
 
-llvm::Type* CodeGen::boolType() {
-    return llvm::Type::getInt1Ty(context);
-}
-
 bool CodeGen::ensureStackSize(int required, const std::string& operation) {
     if ((int)operandStack.size() < required) {
-        std::cerr << "LLVM Error: Stack underflow during " << operation << "\n";
+        std::cerr << "[CODEGEN ERROR] Stack underflow during " << operation
+                  << ". Required: " << required
+                  << ", Available: " << operandStack.size() << "\n";
         return false;
     }
+
     return true;
 }
 
@@ -99,46 +78,119 @@ llvm::AllocaInst* CodeGen::createEntryBlockAlloca(const std::string& varName) {
     return tempBuilder.CreateAlloca(intType(), nullptr, varName);
 }
 
-void CodeGen::pushNumber(const Token& token) {
-    int value = std::stoi(token.value);
+std::string CodeGen::valueToString(llvm::Value* value) {
+    if (!value) return "<null>";
+
+    if (value->hasName()) {
+        return "%" + value->getName().str();
+    }
+
+    std::string output;
+    llvm::raw_string_ostream stream(output);
+    value->print(stream);
+    return stream.str();
+}
+
+std::string CodeGen::stackToString() {
+    std::stack<llvm::Value*> temp = operandStack;
+    std::vector<std::string> values;
+
+    while (!temp.empty()) {
+        values.push_back(valueToString(temp.top()));
+        temp.pop();
+    }
+
+    std::ostringstream out;
+    out << "[";
+
+    for (int i = values.size() - 1; i >= 0; i--) {
+        out << values[i];
+        if (i != 0) out << ", ";
+    }
+
+    out << "]";
+    return out.str();
+}
+
+void CodeGen::printTraceHeader() {
+    std::cout << "\n====================================================================================================\n";
+    std::cout << " LLVM IR GENERATION TRACE\n";
+    std::cout << "====================================================================================================\n";
+    std::cout << std::left
+              << std::setw(6)  << "STEP"
+              << std::setw(18) << "OPERATION"
+              << std::setw(45) << "GENERATED LLVM IR"
+              << "OPERAND STACK\n";
+    std::cout << "----------------------------------------------------------------------------------------------------\n";
+}
+
+void CodeGen::printTraceRow(const std::string& operation, const std::string& irText) {
+    std::cout << std::left
+              << std::setw(6)  << stepCounter++
+              << std::setw(18) << operation
+              << std::setw(45) << irText
+              << stackToString() << "\n";
+}
+
+void CodeGen::printCompactIR() {
+    std::cout << "\n========================================\n";
+    std::cout << " GENERATED LLVM IR INSTRUCTIONS\n";
+    std::cout << "========================================\n";
+
+    for (const std::string& line : compactIR) {
+        std::cout << line << "\n";
+    }
+}
+
+void CodeGen::pushNumber(const std::string& value) {
+    int number = std::stoi(value);
 
     llvm::Value* numberValue =
-        llvm::ConstantInt::get(intType(), value, true);
+        llvm::ConstantInt::get(intType(), number, true);
 
     operandStack.push(numberValue);
 
-    std::cout << "[LLVM] PUSH NUMBER " << value << "\n";
+    printTraceRow("PUSH " + value, "; constant");
 }
 
-void CodeGen::pushVariable(const Token& token) {
-    std::string name = token.value;
-
-    if (peekToken().type == TokenType::ASSIGN) {
-        std::cout << "[LLVM] Identifier '" << name << "' waiting for assignment\n";
-        return;
-    }
-
+void CodeGen::loadVariable(const std::string& name) {
     if (variables.find(name) == variables.end()) {
-        std::cerr << "LLVM Error: Undefined variable '" << name << "'\n";
+        std::cerr << "[CODEGEN ERROR] Undefined variable '" << name << "'\n";
         return;
     }
 
     llvm::Value* loadedValue =
-        builder.CreateLoad(
-            intType(),
-            variables[name],
-            name + "_load"
-        );
+        builder.CreateLoad(intType(), variables[name], name + "_load");
+
+    std::string irLine = valueToString(loadedValue) + " = load i32, ptr %" + name;
+    compactIR.push_back(irLine);
 
     operandStack.push(loadedValue);
 
-    std::cout << "[LLVM] LOAD VARIABLE " << name << "\n";
+    printTraceRow("LOAD " + name, irLine);
 }
 
-void CodeGen::handleArithmetic(TokenType type) {
-    if (!ensureStackSize(2, "arithmetic operation")) {
-        return;
+void CodeGen::storeVariable(const std::string& name) {
+    if (!ensureStackSize(1, "store")) return;
+
+    llvm::Value* value = operandStack.top();
+    operandStack.pop();
+
+    if (variables.find(name) == variables.end()) {
+        variables[name] = createEntryBlockAlloca(name);
+        compactIR.push_back("%" + name + " = alloca i32");
     }
+
+    builder.CreateStore(value, variables[name]);
+
+    std::string irLine = "store i32 " + valueToString(value) + ", ptr %" + name;
+    compactIR.push_back(irLine);
+
+    printTraceRow("STORE " + name, irLine);
+}
+
+void CodeGen::emitArithmetic(OpType type) {
+    if (!ensureStackSize(2, "arithmetic")) return;
 
     llvm::Value* right = operandStack.top();
     operandStack.pop();
@@ -147,40 +199,50 @@ void CodeGen::handleArithmetic(TokenType type) {
     operandStack.pop();
 
     llvm::Value* result = nullptr;
+    std::string operation;
+    std::string llvmOp;
 
     switch (type) {
-        case TokenType::PLUS:
+        case OpType::ADD:
             result = builder.CreateAdd(left, right, "addtmp");
-            std::cout << "[LLVM] ADD\n";
+            operation = "ADD";
+            llvmOp = "add";
             break;
 
-        case TokenType::MINUS:
+        case OpType::SUB:
             result = builder.CreateSub(left, right, "subtmp");
-            std::cout << "[LLVM] SUB\n";
+            operation = "SUB";
+            llvmOp = "sub";
             break;
 
-        case TokenType::STAR:
+        case OpType::MUL:
             result = builder.CreateMul(left, right, "multmp");
-            std::cout << "[LLVM] MUL\n";
+            operation = "MUL";
+            llvmOp = "mul";
             break;
 
-        case TokenType::SLASH:
+        case OpType::DIV:
             result = builder.CreateSDiv(left, right, "divtmp");
-            std::cout << "[LLVM] DIV\n";
+            operation = "DIV";
+            llvmOp = "sdiv";
             break;
 
         default:
-            std::cerr << "LLVM Error: Unknown arithmetic operator\n";
             return;
     }
 
+    std::string irLine =
+        valueToString(result) + " = " + llvmOp + " i32 " +
+        valueToString(left) + ", " + valueToString(right);
+
+    compactIR.push_back(irLine);
     operandStack.push(result);
+
+    printTraceRow(operation, irLine);
 }
 
-void CodeGen::handleComparison(TokenType type) {
-    if (!ensureStackSize(2, "comparison operation")) {
-        return;
-    }
+void CodeGen::emitComparison(OpType type) {
+    if (!ensureStackSize(2, "comparison")) return;
 
     llvm::Value* right = operandStack.top();
     operandStack.pop();
@@ -188,71 +250,72 @@ void CodeGen::handleComparison(TokenType type) {
     llvm::Value* left = operandStack.top();
     operandStack.pop();
 
-    llvm::Value* cmpResult = nullptr;
+    llvm::Value* cmp = nullptr;
+    std::string operation;
+    std::string pred;
 
     switch (type) {
-        case TokenType::GREATER:
-            cmpResult = builder.CreateICmpSGT(left, right, "cmptmp");
-            std::cout << "[LLVM] GREATER THAN\n";
+        case OpType::GREATER:
+            cmp = builder.CreateICmpSGT(left, right, "cmptmp");
+            operation = "GREATER";
+            pred = "sgt";
             break;
 
-        case TokenType::LESS:
-            cmpResult = builder.CreateICmpSLT(left, right, "cmptmp");
-            std::cout << "[LLVM] LESS THAN\n";
+        case OpType::LESS:
+            cmp = builder.CreateICmpSLT(left, right, "cmptmp");
+            operation = "LESS";
+            pred = "slt";
             break;
 
-        case TokenType::EQUAL_EQUAL:
-            cmpResult = builder.CreateICmpEQ(left, right, "cmptmp");
-            std::cout << "[LLVM] EQUAL EQUAL\n";
+        case OpType::GREATER_EQUAL:
+            cmp = builder.CreateICmpSGE(left, right, "cmptmp");
+            operation = "GREATER_EQUAL";
+            pred = "sge";
+            break;
+
+        case OpType::LESS_EQUAL:
+            cmp = builder.CreateICmpSLE(left, right, "cmptmp");
+            operation = "LESS_EQUAL";
+            pred = "sle";
+            break;
+
+        case OpType::EQUAL:
+            cmp = builder.CreateICmpEQ(left, right, "cmptmp");
+            operation = "EQUAL";
+            pred = "eq";
+            break;
+
+        case OpType::NOT_EQUAL:
+            cmp = builder.CreateICmpNE(left, right, "cmptmp");
+            operation = "NOT_EQUAL";
+            pred = "ne";
             break;
 
         default:
-            std::cerr << "LLVM Error: Unknown comparison operator\n";
             return;
     }
 
+    std::string cmpLine =
+        valueToString(cmp) + " = icmp " + pred + " i32 " +
+        valueToString(left) + ", " + valueToString(right);
+
     llvm::Value* intResult =
-        builder.CreateZExt(cmpResult, intType(), "booltoint");
+        builder.CreateZExt(cmp, intType(), "booltoint");
+
+    std::string zextLine =
+        valueToString(intResult) + " = zext i1 " +
+        valueToString(cmp) + " to i32";
+
+    compactIR.push_back(cmpLine);
+    compactIR.push_back(zextLine);
 
     operandStack.push(intResult);
+
+    printTraceRow(operation, cmpLine);
 }
 
-void CodeGen::handleAssignment() {
-    if (pos == 0) {
-        std::cerr << "LLVM Error: Assignment without variable name\n";
-        return;
-    }
-
-    Token previous = tokens[pos - 1];
-
-    if (previous.type != TokenType::IDENTIFIER) {
-        std::cerr << "LLVM Error: Assignment must come after variable name\n";
-        return;
-    }
-
-    if (!ensureStackSize(1, "assignment")) {
-        return;
-    }
-
-    llvm::Value* value = operandStack.top();
-    operandStack.pop();
-
-    std::string varName = previous.value;
-
-    if (variables.find(varName) == variables.end()) {
-        variables[varName] = createEntryBlockAlloca(varName);
-        std::cout << "[LLVM] ALLOCA VARIABLE " << varName << "\n";
-    }
-
-    builder.CreateStore(value, variables[varName]);
-
-    std::cout << "[LLVM] STORE VARIABLE " << varName << "\n";
-}
-
-void CodeGen::handlePrint() {
-    if (!ensureStackSize(1, "print")) {
-        return;
-    }
+void CodeGen::emitPrint() {
+    if (!ensureStackSize(1, "print")) return;
 
     llvm::Value* value = operandStack.top();
     operandStack.pop();
@@ -262,13 +325,14 @@ void CodeGen::handlePrint() {
 
     builder.CreateCall(printfFunction, {formatString, value});
 
-    std::cout << "[LLVM] PRINT\n";
+    std::string irLine = "call @printf(" + valueToString(value) + ")";
+    compactIR.push_back(irLine);
+
+    printTraceRow("PRINT", irLine);
 }
 
-void CodeGen::handleIf() {
-    if (!ensureStackSize(1, "if condition")) {
-        return;
-    }
+void CodeGen::emitIfElse(const Op& op) {
+    if (!ensureStackSize(1, "if condition")) return;
 
     llvm::Value* conditionValue = operandStack.top();
     operandStack.pop();
@@ -278,6 +342,12 @@ void CodeGen::handleIf() {
 
     llvm::Value* condition =
         builder.CreateICmpNE(conditionValue, zero, "ifcond");
+
+    std::string condLine =
+        valueToString(condition) + " = icmp ne i32 " +
+        valueToString(conditionValue) + ", 0";
+
+    compactIR.push_back(condLine);
 
     llvm::BasicBlock* thenBlock =
         llvm::BasicBlock::Create(context, "then", mainFunction);
@@ -290,106 +360,103 @@ void CodeGen::handleIf() {
 
     builder.CreateCondBr(condition, thenBlock, elseBlock);
 
-    advance();
+    std::string branchLine = "br i1 " + valueToString(condition) +
+                             ", label %then, label %else";
+
+    compactIR.push_back(branchLine);
+
+    printTraceRow("IF_CONDITION", branchLine);
+
+    compactIR.push_back("then:");
 
     builder.SetInsertPoint(thenBlock);
-    generateBlock(true);
+    generateOps(op.thenOps);
 
     if (!builder.GetInsertBlock()->getTerminator()) {
         builder.CreateBr(mergeBlock);
+        compactIR.push_back("br label %ifcont");
     }
+
+    compactIR.push_back("else:");
 
     mainFunction->insert(mainFunction->end(), elseBlock);
     builder.SetInsertPoint(elseBlock);
-
-    if (currentToken().type == TokenType::ELSE) {
-        advance();
-        generateBlock(true);
-    }
+    generateOps(op.elseOps);
 
     if (!builder.GetInsertBlock()->getTerminator()) {
         builder.CreateBr(mergeBlock);
+        compactIR.push_back("br label %ifcont");
     }
+
+    compactIR.push_back("ifcont:");
 
     mainFunction->insert(mainFunction->end(), mergeBlock);
     builder.SetInsertPoint(mergeBlock);
 
-    if (currentToken().type == TokenType::ENDIF) {
-        std::cout << "[LLVM] ENDIF reached\n";
-    } else {
-        std::cerr << "LLVM Error: Missing endif\n";
-    }
-
-    std::cout << "[LLVM] IF-ELSE BLOCK GENERATED\n";
+    printTraceRow("MERGE_IF", "; merge block");
 }
 
-void CodeGen::generateBlock(bool stopAtElseOrEndif) {
-    while (currentToken().type != TokenType::END_OF_FILE) {
-        Token token = currentToken();
+void CodeGen::generateOp(const Op& op) {
+    switch (op.type) {
+        case OpType::PUSH_NUMBER:
+            pushNumber(op.value);
+            break;
 
-        if (stopAtElseOrEndif &&
-            (token.type == TokenType::ELSE || token.type == TokenType::ENDIF)) {
-            return;
-        }
+        case OpType::LOAD_VARIABLE:
+            loadVariable(op.value);
+            break;
 
-        switch (token.type) {
-            case TokenType::NUMBER:
-                pushNumber(token);
-                break;
+        case OpType::STORE_VARIABLE:
+            storeVariable(op.value);
+            break;
 
-            case TokenType::IDENTIFIER:
-                pushVariable(token);
-                break;
+        case OpType::ADD:
+        case OpType::SUB:
+        case OpType::MUL:
+        case OpType::DIV:
+            emitArithmetic(op.type);
+            break;
 
-            case TokenType::PLUS:
-            case TokenType::MINUS:
-            case TokenType::STAR:
-            case TokenType::SLASH:
-                handleArithmetic(token.type);
-                break;
+        case OpType::GREATER:
+        case OpType::LESS:
+        case OpType::GREATER_EQUAL:
+        case OpType::LESS_EQUAL:
+        case OpType::EQUAL:
+        case OpType::NOT_EQUAL:
+            emitComparison(op.type);
+            break;
 
-            case TokenType::GREATER:
-            case TokenType::LESS:
-            case TokenType::EQUAL_EQUAL:
-                handleComparison(token.type);
-                break;
+        case OpType::PRINT:
+            emitPrint();
+            break;
 
-            case TokenType::ASSIGN:
-                handleAssignment();
-                break;
-
-            case TokenType::PRINT:
-                handlePrint();
-                break;
-
-            case TokenType::IF:
-                handleIf();
-                break;
-
-            case TokenType::UNKNOWN:
-                std::cerr << "LLVM Error: Unknown token '" << token.value << "'\n";
-                break;
-
-            default:
-                break;
-        }
-
-        advance();
+        case OpType::IF_ELSE:
+            emitIfElse(op);
+            break;
     }
 }
 
-void CodeGen::generateIR(const std::string& outputFile) {
-    std::cout << "\n===== LLVM IR GENERATION =====\n";
+void CodeGen::generateOps(const std::vector<Op>& ops) {
+    for (const Op& op : ops) {
+        generateOp(op);
+    }
+}
+
+void CodeGen::generateIR(const std::vector<Op>& ops, const std::string& outputFile) {
+    std::cout << "\n========================================\n";
+    std::cout << " LLVM IR GENERATION PHASE\n";
+    std::cout << "========================================\n";
 
     createPrintfFunction();
     createMainFunction();
 
-    generateBlock(false);
+    printTraceHeader();
+    generateOps(ops);
 
     builder.CreateRet(llvm::ConstantInt::get(intType(), 0));
 
     if (llvm::verifyModule(*module, &llvm::errs())) {
-        std::cerr << "LLVM Error: Module verification failed\n";
+        std::cerr << "[CODEGEN ERROR] LLVM module verification failed\n";
         return;
     }
 
@@ -397,12 +464,13 @@ void CodeGen::generateIR(const std::string& outputFile) {
     llvm::raw_fd_ostream outFile(outputFile, errorCode);
 
     if (errorCode) {
-        std::cerr << "Error: Could not write LLVM IR to file " << outputFile << "\n";
+        std::cerr << "[CODEGEN ERROR] Could not write LLVM IR to " << outputFile << "\n";
         return;
     }
 
     module->print(outFile, nullptr);
 
-    std::cout << "LLVM IR written to " << outputFile << "\n";
-    std::cout << "===== LLVM IR GENERATION COMPLETE =====\n";
+    printCompactIR();
+
+    std::cout << "\nLLVM IR file written to: " << outputFile << "\n";
 }

@@ -6,19 +6,18 @@
 #include <stack>
 #include <unordered_map>
 #include <memory>
-#include "lexer.h"
+
+#include "instructions.h"
 
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/Instructions.h>
 
 class CodeGen {
 private:
-    std::vector<Token> tokens;
-    size_t pos;
-
     llvm::LLVMContext context;
     std::unique_ptr<llvm::Module> module;
     llvm::IRBuilder<> builder;
@@ -29,34 +28,40 @@ private:
     std::stack<llvm::Value*> operandStack;
     std::unordered_map<std::string, llvm::AllocaInst*> variables;
 
-    Token currentToken();
-    Token peekToken();
-    void advance();
+    int stepCounter;
+    std::vector<std::string> compactIR;
 
     llvm::Type* intType();
-    llvm::Type* boolType();
 
     void createMainFunction();
     void createPrintfFunction();
 
     llvm::AllocaInst* createEntryBlockAlloca(const std::string& varName);
 
-    void pushNumber(const Token& token);
-    void pushVariable(const Token& token);
+    void generateOps(const std::vector<Op>& ops);
+    void generateOp(const Op& op);
 
-    void handleArithmetic(TokenType type);
-    void handleComparison(TokenType type);
-    void handleAssignment();
-    void handlePrint();
-    void handleIf();
+    void pushNumber(const std::string& value);
+    void loadVariable(const std::string& name);
+    void storeVariable(const std::string& name);
 
-    void generateBlock(bool stopAtElseOrEndif);
+    void emitArithmetic(OpType type);
+    void emitComparison(OpType type);
+    void emitPrint();
+    void emitIfElse(const Op& op);
 
     bool ensureStackSize(int required, const std::string& operation);
 
+    std::string valueToString(llvm::Value* value);
+    std::string stackToString();
+    void printTraceRow(const std::string& operation, const std::string& irText);
+
+    void printTraceHeader();
+    void printCompactIR();
+
 public:
-    CodeGen(const std::vector<Token>& tokenList);
-    void generateIR(const std::string& outputFile);
+    CodeGen();
+    void generateIR(const std::vector<Op>& ops, const std::string& outputFile);
 };
 
 #endif

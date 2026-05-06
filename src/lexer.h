@@ -15,7 +15,10 @@ enum class TokenType {
 
     GREATER,
     LESS,
+    GREATER_EQUAL,
+    LESS_EQUAL,
     EQUAL_EQUAL,
+    NOT_EQUAL,
 
     ASSIGN,
 

@@ -51,18 +51,10 @@ Token Lexer::identifier() {
         advance();
     }
 
-    if (result == "if") {
-        return {TokenType::IF, result};
-    }
-    if (result == "else") {
-        return {TokenType::ELSE, result};
-    }
-    if (result == "endif") {
-        return {TokenType::ENDIF, result};
-    }
-    if (result == "print") {
-        return {TokenType::PRINT, result};
-    }
+    if (result == "if") return {TokenType::IF, result};
+    if (result == "else") return {TokenType::ELSE, result};
+    if (result == "endif") return {TokenType::ENDIF, result};
+    if (result == "print") return {TokenType::PRINT, result};
 
     return {TokenType::IDENTIFIER, result};
 }
@@ -111,13 +103,25 @@ std::vector<Token> Lexer::tokenize() {
                 break;
 
             case '>':
-                tokens.push_back({TokenType::GREATER, ">"});
-                advance();
+                if (peekChar() == '=') {
+                    tokens.push_back({TokenType::GREATER_EQUAL, ">="});
+                    advance();
+                    advance();
+                } else {
+                    tokens.push_back({TokenType::GREATER, ">"});
+                    advance();
+                }
                 break;
 
             case '<':
-                tokens.push_back({TokenType::LESS, "<"});
-                advance();
+                if (peekChar() == '=') {
+                    tokens.push_back({TokenType::LESS_EQUAL, "<="});
+                    advance();
+                    advance();
+                } else {
+                    tokens.push_back({TokenType::LESS, "<"});
+                    advance();
+                }
                 break;
 
             case '=':
@@ -127,6 +131,17 @@ std::vector<Token> Lexer::tokenize() {
                     advance();
                 } else {
                     tokens.push_back({TokenType::ASSIGN, "="});
+                    advance();
+                }
+                break;
+
+            case '!':
+                if (peekChar() == '=') {
+                    tokens.push_back({TokenType::NOT_EQUAL, "!="});
+                    advance();
+                    advance();
+                } else {
+                    tokens.push_back({TokenType::UNKNOWN, "!"});
                     advance();
                 }
                 break;
@@ -154,7 +169,10 @@ std::string tokenTypeToString(TokenType type) {
 
         case TokenType::GREATER: return "GREATER";
         case TokenType::LESS: return "LESS";
+        case TokenType::GREATER_EQUAL: return "GREATER_EQUAL";
+        case TokenType::LESS_EQUAL: return "LESS_EQUAL";
         case TokenType::EQUAL_EQUAL: return "EQUAL_EQUAL";
+        case TokenType::NOT_EQUAL: return "NOT_EQUAL";
 
         case TokenType::ASSIGN: return "ASSIGN";
 

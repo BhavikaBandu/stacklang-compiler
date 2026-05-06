@@ -3,40 +3,41 @@
 
 #include <vector>
 #include <string>
-#include <stack>
-#include <unordered_map>
+#include <unordered_set>
+
 #include "lexer.h"
+#include "instructions.h"
 
 class Parser {
 private:
     std::vector<Token> tokens;
     size_t pos;
 
-    std::stack<int> operandStack;
-    std::unordered_map<std::string, int> variables;
+    int stackDepth;
+    std::unordered_set<std::string> symbols;
+    bool hadError;
 
     Token currentToken();
     Token peekToken();
     void advance();
 
-    void pushNumber(const Token& token);
-    void pushVariable(const Token& token);
+    bool requireStack(int count, const std::string& operation);
+    void pushStack();
+    void popStack();
+    void replaceBinaryOp();
 
-    void handleArithmetic(TokenType type);
-    void handleComparison(TokenType type);
-    void handleAssignment();
-    void handlePrint();
+    std::vector<Op> parseBlock(bool stopAtElseOrEndif);
 
-    void handleIf();
-
-    void parseBlock(bool execute, bool stopAtElseOrEndif);
-
-    void printStackTrace(const std::string& action);
-    bool ensureStackSize(int required, const std::string& operation);
+    void printInstructionList(const std::vector<Op>& ops, int indent = 0);
+    void printOp(const Op& op, int indent);
 
 public:
     Parser(const std::vector<Token>& tokenList);
-    void parse();
+
+    std::vector<Op> parseProgram();
+    bool hasError() const;
+
+    void printInstructions(const std::vector<Op>& ops);
 };
 
 #endif
