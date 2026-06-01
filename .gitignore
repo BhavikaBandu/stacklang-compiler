@@ -2,3 +2,6 @@ stack_compiler
 program
 output.ll
 *.o
+
+build/
+compile_commands.json
