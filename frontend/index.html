@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StackLang Compiler</title>
+
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app">
+
+    <header class="topbar">
+
+        <div class="title-block">
+            <h1>StackLang <span>Compiler</span></h1>
+
+            <p>
+                An interactive stack-based compiler workbench for visualizing
+                lexical analysis, parser stack instructions, LLVM IR generation,
+                stack-to-SSA translation, and native execution.
+            </p>
+        </div>
+
+        <div class="actions">
+            <select id="sampleSelect">
+                <option value="">Example Programs</option>
+            </select>
+
+            <button id="compileBtn">Compile</button>
+            <button id="runBtn">Run</button>
+            <button id="resetBtn">Reset</button>
+        </div>
+
+    </header>
+
+    <main>
+
+        <!-- ===================================================== -->
+        <!-- ROW 1 -->
+        <!-- ===================================================== -->
+
+        <section class="row row-one">
+
+            <div class="panel editor-panel">
+                <div class="panel-title">Source Code</div>
+
+                <div id="editor"></div>
+            </div>
+
+            <div class="panel pipeline-panel">
+
+                <div class="panel-title">
+                    Compiler Pipeline
+                </div>
+
+                <div class="pipeline" id="pipeline"></div>
+
+                <div class="status-box" id="pipelineStatus">
+                    Waiting for source code...
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- ===================================================== -->
+        <!-- ROW 2 -->
+        <!-- ===================================================== -->
+
+        <section class="panel tabs-panel">
+
+            <div class="tabs">
+
+                <button
+                    class="tab active"
+                    data-tab="tokens">
+                    Lexer - Tokens
+                </button>
+
+                <button
+                    class="tab"
+                    data-tab="stack">
+                    Parser - Stack Trace
+                </button>
+
+                <button
+                    class="tab"
+                    data-tab="llvmInstructions">
+                    LLVM Instructions
+                </button>
+
+                <button
+                    class="tab"
+                    data-tab="llvmIR">
+                    LLVM IR
+                </button>
+
+                <button
+                    class="tab"
+                    data-tab="output">
+                    Output
+                </button>
+
+                <button
+                    class="tab"
+                    data-tab="errors">
+                    Errors
+                </button>
+
+            </div>
+
+            <div
+                class="tab-content active"
+                id="tokens">
+            </div>
+
+            <div
+                class="tab-content"
+                id="stack">
+            </div>
+
+            <div
+                class="tab-content"
+                id="llvmInstructions">
+            </div>
+
+            <div
+                class="tab-content"
+                id="llvmIR">
+            </div>
+
+            <div
+                class="tab-content"
+                id="output">
+            </div>
+
+            <div
+                class="tab-content"
+                id="errors">
+            </div>
+
+        </section>
+
+        <!-- ===================================================== -->
+        <!-- ROW 3 -->
+        <!-- ===================================================== -->
+
+        <section class="row row-two">
+
+            <!-- STACK VISUALIZER -->
+
+            <div class="panel">
+
+                <div class="panel-title">
+                    Interactive Stack Visualizer
+                </div>
+
+                <div class="stack-controls">
+
+                    <button id="prevStepBtn">
+                        ⏮ Previous
+                    </button>
+
+                    <button id="playStepBtn">
+                        ▶ Play
+                    </button>
+
+                    <button id="pauseStepBtn">
+                        ⏸ Pause
+                    </button>
+
+                    <button id="nextStepBtn">
+                        ⏭ Next
+                    </button>
+
+                </div>
+
+                <div class="stack-area">
+
+                    <div>
+
+                        <h4>
+                            Execution Steps
+                        </h4>
+
+                        <div
+                            id="executionSteps"
+                            class="steps">
+                        </div>
+
+                    </div>
+
+                    <div>
+
+                        <h4>
+                            Current Stack
+                        </h4>
+
+                        <div
+                            id="stackBox"
+                            class="stack-box">
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- STACK TO SSA -->
+
+            <div class="panel">
+
+                <div class="panel-title">
+                    Stack → SSA Mapping
+                </div>
+
+                <div
+                    id="ssaMapping"
+                    class="mapping">
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+
+<script src="js/samples.js"></script>
+<script src="js/editor.js"></script>
+<script src="js/api.js"></script>
+<script src="js/tabs.js"></script>
+<script src="js/pipeline.js"></script>
+<script src="js/stackVisualizer.js"></script>
+<script src="js/ssaMapping.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>

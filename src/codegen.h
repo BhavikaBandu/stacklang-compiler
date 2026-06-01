@@ -30,6 +30,7 @@ private:
 
     int stepCounter;
     std::vector<std::string> compactIR;
+    std::vector<std::string> stackSSAMapping;
 
     llvm::Type* intType();
 
@@ -54,10 +55,18 @@ private:
 
     std::string valueToString(llvm::Value* value);
     std::string stackToString();
+
     void printTraceRow(const std::string& operation, const std::string& irText);
+    void recordStackSSAMapping(
+        const std::string& operation,
+        const std::string& beforeStack,
+        const std::string& afterStack,
+        const std::string& ssaText
+    );
 
     void printTraceHeader();
     void printCompactIR();
+    void printStackSSAMapping();
 
 public:
     CodeGen();

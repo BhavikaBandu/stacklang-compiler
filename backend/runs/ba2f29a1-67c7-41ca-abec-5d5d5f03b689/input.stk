@@ -1,0 +1,13 @@
+15 x =
+x 10 > if
+    x print
+else
+    0 print
+endif
+
+5 y =
+y 10 > if
+    y print
+else
+    0 print
+endif

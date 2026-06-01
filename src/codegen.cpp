@@ -132,6 +132,22 @@ void CodeGen::printTraceRow(const std::string& operation, const std::string& irT
               << stackToString() << "\n";
 }
 
+void CodeGen::recordStackSSAMapping(
+    const std::string& operation,
+    const std::string& beforeStack,
+    const std::string& afterStack,
+    const std::string& ssaText
+) {
+    std::ostringstream out;
+
+    out << std::left
+        << std::setw(22) << operation
+        << std::setw(42) << (beforeStack + " -> " + afterStack)
+        << ssaText;
+
+    stackSSAMapping.push_back(out.str());
+}
+
 void CodeGen::printCompactIR() {
     std::cout << "\n========================================\n";
     std::cout << " GENERATED LLVM IR INSTRUCTIONS\n";
@@ -142,7 +158,26 @@ void CodeGen::printCompactIR() {
     }
 }
 
+void CodeGen::printStackSSAMapping() {
+    std::cout << "\n========================================\n";
+    std::cout << " STACK TO SSA MAPPING\n";
+    std::cout << "========================================\n";
+
+    std::cout << std::left
+              << std::setw(22) << "STACK OPERATION"
+              << std::setw(42) << "STACK TRANSITION"
+              << "LLVM / SSA VALUE\n";
+
+    std::cout << "----------------------------------------------------------------------------------------------------\n";
+
+    for (const std::string& line : stackSSAMapping) {
+        std::cout << line << "\n";
+    }
+}
+
 void CodeGen::pushNumber(const std::string& value) {
+    std::string beforeStack = stackToString();
+
     int number = std::stoi(value);
 
     llvm::Value* numberValue =
@@ -150,7 +185,16 @@ void CodeGen::pushNumber(const std::string& value) {
 
     operandStack.push(numberValue);
 
+    std::string afterStack = stackToString();
+
     printTraceRow("PUSH " + value, "; constant");
+
+    recordStackSSAMapping(
+        "PUSH " + value,
+        beforeStack,
+        afterStack,
+        valueToString(numberValue)
+    );
 }
 
 void CodeGen::loadVariable(const std::string& name) {
@@ -158,6 +202,8 @@ void CodeGen::loadVariable(const std::string& name) {
         std::cerr << "[CODEGEN ERROR] Undefined variable '" << name << "'\n";
         return;
     }
+
+    std::string beforeStack = stackToString();
 
     llvm::Value* loadedValue =
         builder.CreateLoad(intType(), variables[name], name + "_load");
@@ -167,11 +213,22 @@ void CodeGen::loadVariable(const std::string& name) {
 
     operandStack.push(loadedValue);
 
+    std::string afterStack = stackToString();
+
     printTraceRow("LOAD " + name, irLine);
+
+    recordStackSSAMapping(
+        "LOAD " + name,
+        beforeStack,
+        afterStack,
+        irLine
+    );
 }
 
 void CodeGen::storeVariable(const std::string& name) {
     if (!ensureStackSize(1, "store")) return;
+
+    std::string beforeStack = stackToString();
 
     llvm::Value* value = operandStack.top();
     operandStack.pop();
@@ -186,11 +243,22 @@ void CodeGen::storeVariable(const std::string& name) {
     std::string irLine = "store i32 " + valueToString(value) + ", ptr %" + name;
     compactIR.push_back(irLine);
 
+    std::string afterStack = stackToString();
+
     printTraceRow("STORE " + name, irLine);
+
+    recordStackSSAMapping(
+        "STORE " + name,
+        beforeStack,
+        afterStack,
+        irLine
+    );
 }
 
 void CodeGen::emitArithmetic(OpType type) {
     if (!ensureStackSize(2, "arithmetic")) return;
+
+    std::string beforeStack = stackToString();
 
     llvm::Value* right = operandStack.top();
     operandStack.pop();
@@ -238,11 +306,22 @@ void CodeGen::emitArithmetic(OpType type) {
     compactIR.push_back(irLine);
     operandStack.push(result);
 
+    std::string afterStack = stackToString();
+
     printTraceRow(operation, irLine);
+
+    recordStackSSAMapping(
+        operation,
+        beforeStack,
+        afterStack,
+        irLine
+    );
 }
 
 void CodeGen::emitComparison(OpType type) {
     if (!ensureStackSize(2, "comparison")) return;
+
+    std::string beforeStack = stackToString();
 
     llvm::Value* right = operandStack.top();
     operandStack.pop();
@@ -311,11 +390,22 @@ void CodeGen::emitComparison(OpType type) {
 
     operandStack.push(intResult);
 
+    std::string afterStack = stackToString();
+
     printTraceRow(operation, cmpLine);
+
+    recordStackSSAMapping(
+        operation,
+        beforeStack,
+        afterStack,
+        cmpLine + " ; " + zextLine
+    );
 }
 
 void CodeGen::emitPrint() {
     if (!ensureStackSize(1, "print")) return;
+
+    std::string beforeStack = stackToString();
 
     llvm::Value* value = operandStack.top();
     operandStack.pop();
@@ -328,11 +418,22 @@ void CodeGen::emitPrint() {
     std::string irLine = "call @printf(" + valueToString(value) + ")";
     compactIR.push_back(irLine);
 
+    std::string afterStack = stackToString();
+
     printTraceRow("PRINT", irLine);
+
+    recordStackSSAMapping(
+        "PRINT",
+        beforeStack,
+        afterStack,
+        irLine
+    );
 }
 
 void CodeGen::emitIfElse(const Op& op) {
     if (!ensureStackSize(1, "if condition")) return;
+
+    std::string beforeStack = stackToString();
 
     llvm::Value* conditionValue = operandStack.top();
     operandStack.pop();
@@ -348,6 +449,15 @@ void CodeGen::emitIfElse(const Op& op) {
         valueToString(conditionValue) + ", 0";
 
     compactIR.push_back(condLine);
+
+    std::string afterConditionStack = stackToString();
+
+    recordStackSSAMapping(
+        "IF_CONDITION",
+        beforeStack,
+        afterConditionStack,
+        condLine
+    );
 
     llvm::BasicBlock* thenBlock =
         llvm::BasicBlock::Create(context, "then", mainFunction);
@@ -471,6 +581,7 @@ void CodeGen::generateIR(const std::vector<Op>& ops, const std::string& outputFi
     module->print(outFile, nullptr);
 
     printCompactIR();
+    printStackSSAMapping();
 
     std::cout << "\nLLVM IR file written to: " << outputFile << "\n";
 }
