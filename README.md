@@ -32,6 +32,7 @@ This project was developed as part of Assignment 2: Tiny Stack-Based Language Co
 
 ## Compiler Pipeline
 
+```text
 Source Program
 ↓
 Lexer
@@ -49,6 +50,7 @@ output.ll
 clang
 ↓
 Native Executable
+```
 
 ---
 
