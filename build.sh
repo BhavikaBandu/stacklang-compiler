@@ -27,6 +27,8 @@ install_if_missing libclang-dev
 install_if_missing python3
 install_if_missing python3-flask
 install_if_missing python3-flask-cors
+install_if_missing g++-12
+install_if_missing libstdc++-12-dev
 
 echo ""
 echo "Building StackLang compiler..."

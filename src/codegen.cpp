@@ -489,7 +489,6 @@ void CodeGen::emitIfElse(const Op& op) {
 
     compactIR.push_back("else:");
 
-    mainFunction->insert(mainFunction->end(), elseBlock);
     builder.SetInsertPoint(elseBlock);
     generateOps(op.elseOps);
 
@@ -500,7 +499,6 @@ void CodeGen::emitIfElse(const Op& op) {
 
     compactIR.push_back("ifcont:");
 
-    mainFunction->insert(mainFunction->end(), mergeBlock);
     builder.SetInsertPoint(mergeBlock);
 
     printTraceRow("MERGE_IF", "; merge block");
