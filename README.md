@@ -159,116 +159,89 @@ The build script assumes:
 * Internet connectivity during dependency installation
 * Sudo privileges for package installation
 
-### Build Output
+## Getting Started
 
-Successful compilation produces:
-
-```text
-stack_compiler
-```
-
-This executable is then used by both:
-
-* Command-line execution mode (`./run.sh sample.stack`)
-* Web interface mode (`./run.sh`)
-
-### Verification
-
-After building, verify the compiler exists:
+### Clone the Repository
 
 ```bash
-ls -l stack_compiler
+git clone https://github.com/BhavikaBandu/stacklang-compiler.git
+cd stacklang-compiler
+chmod +x build.sh run.sh
 ```
-
-Expected output:
-
-```text
--rwxr-xr-x ... stack_compiler
-```
-
-### Troubleshooting
-
-#### Missing LLVM Development Libraries
-
-If LLVM headers cannot be found:
-
-```bash
-sudo apt install llvm llvm-dev libclang-dev
-```
-
-#### Missing C++ Standard Library Headers
-
-If errors similar to:
-
-```text
-fatal error: 'iostream' file not found
-```
-
-occur, install:
-
-```bash
-sudo apt install g++-12 libstdc++-12-dev
-```
-
-#### Build Failure
-
-Re-run the build script:
-
-```bash
-./build.sh
-```
-
-and inspect the compiler output for detailed diagnostics.
-
 
 ---
 
-## Running
+### Frontend Mode (Recommended)
 
-### Mode 1: Command Line Execution
-
-Run a sample program directly:
+Build the compiler and launch the web interface:
 
 ```bash
-./run.sh 01_arithmetic.stack
+bash build.sh
+bash run.sh
 ```
 
-or
-
-```bash
-./run.sh samples/01_arithmetic.stack
-```
-
-The script automatically:
-
-1. Compiles the StackLang source
-2. Generates LLVM IR
-3. Compiles LLVM IR using Clang
-4. Executes the generated native program
-5. Displays the final output
-
----
-
-### Mode 2: Web Interface
-
-Start the frontend interface:
-
-```bash
-./run.sh
-```
-
-Then open:
+Open the following URL in your browser:
 
 ```text
 http://127.0.0.1:5000
 ```
 
-The web interface allows users to:
+To test predefined programs:
 
-* Enter custom StackLang programs
-* Execute programs interactively
-* View compiler outputs
-* Select predefined sample programs from the Examples dropdown
+1. Open the **Example Programs** dropdown.
+2. Select a sample program.
+3. Click **Compile** or **Run**.
+
+---
+
+### Command Line Mode
+
+Execute a StackLang source file directly:
+
+```bash
+bash run.sh samples/<file_name>
+```
+
+Example:
+
+```bash
+bash run.sh samples/02_variables.stack
+```
+
+The script automatically:
+
+1. Compiles the StackLang source program.
+2. Generates LLVM IR (`output.ll`).
+3. Produces a native executable using Clang.
+4. Executes the generated program.
+
+---
+
+### Debugging
+
+Rebuild the compiler:
+
+```bash
+bash build.sh
+```
+
+Run the compiler manually:
+
+```bash
+./stack_compiler samples/01_arithmetic.stack
+```
+
+Compile generated LLVM IR:
+
+```bash
+clang output.ll -o program
+```
+
+Execute the generated program:
+
+```bash
+./program
+```
 
 ---
 
@@ -281,7 +254,7 @@ The web interface allows users to:
 | 03_ifelse_true_false.stack        | Conditional execution           |
 | 04_error_stack_underflow.stack    | Stack underflow error           |
 | 05_error_undefined_variable.stack | Undefined variable error        |
-| 06_error_missing_endif.stack      | Parser error handling           |
+| 06_error_missing_endif.stack      | Missing endif error             |
 
 ---
 

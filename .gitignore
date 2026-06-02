@@ -2,3 +2,4 @@ stack_compiler
 program
 output.ll
 *.o
+samples/test.stack
