@@ -1,0 +1,9 @@
+10 a =
+20 b =
+a b + sum =
+sum 2 / avg =
+avg 10 > if
+    avg print
+else
+    0 print
+endif
