@@ -7,19 +7,23 @@ std::string opTypeToString(OpType type) {
         case OpType::PUSH_NUMBER: return "PUSH_NUMBER";
         case OpType::LOAD_VARIABLE: return "LOAD_VARIABLE";
         case OpType::STORE_VARIABLE: return "STORE_VARIABLE";
+
         case OpType::ADD: return "ADD";
         case OpType::SUB: return "SUB";
         case OpType::MUL: return "MUL";
         case OpType::DIV: return "DIV";
+
         case OpType::GREATER: return "GREATER";
         case OpType::LESS: return "LESS";
         case OpType::GREATER_EQUAL: return "GREATER_EQUAL";
         case OpType::LESS_EQUAL: return "LESS_EQUAL";
         case OpType::EQUAL: return "EQUAL";
         case OpType::NOT_EQUAL: return "NOT_EQUAL";
+
         case OpType::PRINT: return "PRINT";
         case OpType::IF_ELSE: return "IF_ELSE";
     }
+
     return "UNKNOWN_OP";
 }
 
@@ -62,6 +66,7 @@ bool Parser::requireStack(int count, const std::string& operation) {
         hadError = true;
         return false;
     }
+
     return true;
 }
 
@@ -117,24 +122,40 @@ std::vector<Op> Parser::parseBlock(bool stopAtElseOrEndif) {
 
             case TokenType::IDENTIFIER: {
                 std::string name = token.value;
-                
+
                 if (peekToken().type == TokenType::ASSIGN) {
-                    if (requireStack(1, "assignment")) {
-                        ops.push_back(Op(OpType::STORE_VARIABLE, name));
-                        symbols.insert(name);
-                        popStack();
-                    }
-                    advance(); 
-                    advance(); 
-                } else {
-                    if (symbols.find(name) == symbols.end()) {
-                        std::cerr << "[PARSER ERROR] Undefined variable '" << name << "'\n";
-                        hadError = true;
-                    }
-                    ops.push_back(Op(OpType::LOAD_VARIABLE, name));
-                    pushStack();
                     advance();
+                    break;
                 }
+
+                if (symbols.find(name) == symbols.end()) {
+                    std::cerr << "[PARSER ERROR] Undefined variable '" << name << "'\n";
+                    hadError = true;
+                }
+
+                ops.push_back(Op(OpType::LOAD_VARIABLE, name));
+                pushStack();
+                advance();
+                break;
+            }
+
+            case TokenType::ASSIGN: {
+                if (pos == 0 || tokens[pos - 1].type != TokenType::IDENTIFIER) {
+                    std::cerr << "[PARSER ERROR] Assignment must follow an identifier\n";
+                    hadError = true;
+                    advance();
+                    break;
+                }
+
+                std::string name = tokens[pos - 1].value;
+
+                if (requireStack(1, "assignment")) {
+                    ops.push_back(Op(OpType::STORE_VARIABLE, name));
+                    symbols.insert(name);
+                    popStack();
+                }
+
+                advance();
                 break;
             }
 

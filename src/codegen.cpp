@@ -463,10 +463,10 @@ void CodeGen::emitIfElse(const Op& op) {
         llvm::BasicBlock::Create(context, "then", mainFunction);
 
     llvm::BasicBlock* elseBlock =
-        llvm::BasicBlock::Create(context, "else");
+        llvm::BasicBlock::Create(context, "else", mainFunction);
 
     llvm::BasicBlock* mergeBlock =
-        llvm::BasicBlock::Create(context, "ifcont");
+        llvm::BasicBlock::Create(context, "ifcont", mainFunction);
 
     builder.CreateCondBr(condition, thenBlock, elseBlock);
 
