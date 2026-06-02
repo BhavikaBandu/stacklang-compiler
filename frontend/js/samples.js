@@ -33,6 +33,39 @@ y print`
 10 10 >= print
 5 10 <= print`
     },
+
+    ifelse: {
+        name: "If-Else Conditions",
+        code:
+`15 x =
+x 10 > if
+    x print
+else
+    0 print
+endif
+
+5 y =
+y 10 > if
+    y print
+else
+    0 print
+endif`
+    },
+
+    fullProgram: {
+        name: "Full Program",
+        code:
+`10 a =
+20 b =
+a b + sum =
+sum 2 / avg =
+avg 10 > if
+    avg print
+else
+    0 print
+endif`
+    },
+
     stackUnderflow: {
         name: "Error: Stack Underflow",
         code:
